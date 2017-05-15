@@ -1,0 +1,99 @@
+---
+title: "Practical Machin Learning Course Project"
+author: "Asraa Amin"
+date: "May 15, 2017"
+output: html_document
+---
+
+## Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+## Goal
+The goal of this project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. After we build our prediction model we should use it to predict 20 different test cases(TestData).
+
+```{r ,results="hide",warning=FALSE,message=FALSE}
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(rattle)
+library(randomForest)
+```
+
+## Getting and Cleaning Data
+First we download our training (TrainData)and validation data(TestData)
+```{r}
+TrainData = read.csv("~/machine-project/pml-training.csv" ,header=TRUE ,na.strings = c("NA","#DIV/0!",""))
+TestData = read.csv("~/machine-project/pml-testing.csv" ,header=TRUE ,na.strings = c("NA","#DIV/0!",""))
+```
+
+We have to build a model to predict classe in the validation data from the nonzero predictors. So we are going to clean our data so it will contain only predictors available in the validation data set.
+```{r}
+Zcolnames <- sapply(names(TestData), function(x) all (is.na (TestData [,x]) == TRUE ))
+NZcolnames <- names(Zcolnames)[Zcolnames==FALSE]
+NZcolnames <- NZcolnames[-(1:7)]
+NZcolnames<- NZcolnames[1:(length(NZcolnames)-1)]
+```
+
+##Modelling
+
+Then we partition our data into training data and testing data.
+
+```{r}
+set.seed(135)
+inTrain<-createDataPartition(TrainData$classe,p=0.7,list=FALSE)
+Training<-TrainData[inTrain,]
+Testing<-TrainData[-inTrain,]
+```
+
+We are going to use three different algorithms to build our model and then make a comparison between them.Here we consider k-fold cross validation using trainControl function where k=5.
+
+1-Prediction with Trees
+
+```{r}
+Control<-trainControl(method="cv",number=5)
+modRpart<-train(classe~.,data=Training[,c("classe",NZcolnames)],method="rpart",trControl=Control)
+predrpart<-predict(modRpart,Testing)
+CMrpart<-confusionMatrix(predrpart,Testing$classe)
+CMrpart
+fancyRpartPlot(modRpart$finalModel)
+
+```
+
+2-Boosting with Trees
+
+```{r,message=FALSE,warning=FALSE}
+modgbm<-train(classe~.,data=Training[,c("classe",NZcolnames)],method="gbm",verbose=FALSE,trControl=Control)
+predgbm<-predict(modgbm,Testing)
+CMgbm<-confusionMatrix(predgbm,Testing$classe)
+CMgbm
+plot(modgbm)
+```
+
+3- Random Forest
+
+```{r}
+modrf<-randomF<-randomForest(classe~.,data=Training[,c("classe",NZcolnames)],ntree=500,trControl=Control)
+predrf<-predict(modrf,Testing)
+CMrf<-confusionMatrix(predrf,Testing$classe)
+CMrf
+plot(modrf)
+```
+
+Comparing the accuracy (out of sample error) of the three prediction algorithms we find that boosting with trees and random forest are better than prediction with trees however random forest has the highest accuracy of the three models.As the random forest has a high accuracy 0.996 we don't have to fit a model that combines predictors.
+```{r}
+CMrpart$overall[1]
+CMgbm$overall[1]
+CMrf$overall[1]
+```
+
+##Prediction
+Using the random fores algorithm model,we predict 20 different cases(validation data TestData).
+```{r}
+predTest<- predict(modrf, TestData)
+predresult<-data.frame(prob_id=TestData$problem_id,predicted=predTest)
+predresult
+```
+
+
+
